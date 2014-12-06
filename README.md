@@ -33,4 +33,16 @@ possible, and power-wasting components such as the Arduino's voltage regulator
 are avoided. The final circuit will probably just use the bare chip, powered
 directly from batteries.
 
-At the time of writing, most of this is still not implemented.
+Schematic forthcoming. Current prototype wired as follows:
+
+* Power connected to RAW and GND
+* IR Reveiver sense pin on pin 11
+* PIR sense pin on pin 12
+* Push button on pin 2 (interrupt pin) and VCC, with pulldown resistor between
+  pin 2 and GND
+* IR LED on pin 3 (required by the library)
+
+The push button and IR LED may be switched around to optimise power consumption.
+Programming is done less often than motion sensing, and interrupts on pins other
+than 2, and presumably 3, need the library to do some checks in order to
+determine the type of change (high, low, rising, falling).
