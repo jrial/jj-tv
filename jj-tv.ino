@@ -249,7 +249,7 @@ void loop() {
     }
   }
   attachInterrupt(0, intrRecord, FALLING);
-  PCintPort::attachInterrupt(MOTION_PIN, intrMotion, FALLING);
+  PCintPort::attachInterrupt(MOTION_PIN, intrMotion, CHANGE);
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
   detachInterrupt(0);
   PCintPort::PCdetachInterrupt(MOTION_PIN);
