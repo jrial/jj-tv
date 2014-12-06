@@ -231,10 +231,14 @@ void setup() {
 
 void loop() {
   if (recording) {
+    int start = millis();
     irrecv.enableIRIn();
     Serial.println("Recording");
     digitalWrite(STATUS_PIN, HIGH);
     while (recording) {
+      if ((millis() - start) > 10000) {
+        recording = false;
+      }
       if (irrecv.decode(&results)) {
         Serial.println("Got code!");
         storeCode(&results);
