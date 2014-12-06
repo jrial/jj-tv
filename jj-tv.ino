@@ -1,19 +1,27 @@
 /*
- * IRrecord: record and play back IR signals as a minimal
- * An IR detector/demodulator must be connected to the input RECV_PIN.
- * An IR LED must be connected to the output PWM pin 3.
- * A button must be connected to the input BUTTON_PIN; this is the
- * send button.
- * A visible LED can be connected to STATUS_PIN to provide status.
- *
- * The logic is:
- * If the button is pressed, send the IR code.
- * If an IR code is received, record it.
- *
- * Version 0.11 September, 2009
- * Copyright 2009 Ken Shirriff
- * http://arcfn.com
- */
+  JJ-TV. Turns the TV on when someone enters the room, and off again when
+  no activity is perceived for a preset time. Possible use case: install in a
+  kid's room so that the TV shuts off after a preset time after they either
+  leave the room or fall asleep with the TV on.
+
+  Version 1.0, December 2014
+
+  Copyright (C) 2014  Juan Rial
+
+  This program is free software; you can redistribute it and/or
+  modify it under the terms of the GNU General Public License
+  as published by the Free Software Foundation; either version 2
+  of the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+  */
 
 #include <IRremote.h>
 #include <EEPROM.h>
@@ -89,8 +97,14 @@ unsigned long EEPROMReadlong(long address) {
   return ((four << 0) & 0xFF) + ((three << 8) & 0xFFFF) + ((two << 16) & 0xFFFFFF) + ((one << 24) & 0xFFFFFFFF);
 }
 
+
+/*
+  Store/Transmit IR codes. These methods are adaptations from their namesakes
+  in the IRrecord example in Ken Shirriff's IRremote library. All the serial
+  logging has been removed, and writing to EEPROM has been added to storeCode.
+  */
+
 // Stores the code for later playback
-// Most of this code is just logging
 void storeCode(decode_results *results) {
   codeType = results->decode_type;
   int count = results->rawlen;
@@ -170,6 +184,7 @@ void sendCode(int repeat) {
   }
 }
 
+// Interrupt handlers.
 void intrRecord() {
   recording = true;
 }
@@ -177,6 +192,7 @@ void intrRecord() {
 void intrMotion() {
   motion = true;
 }
+
 
 void setup() {
   pinMode(BUTTON_PIN, INPUT);
@@ -237,7 +253,7 @@ void loop() {
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
   detachInterrupt(0);
   PCintPort::PCdetachInterrupt(MOTION_PIN);
-  elapsedCycles += 1; // no need to count cycles while in record mode.
+  elapsedCycles += 1;
 
   if (tv_on && (elapsedCycles >= sleepCycles)) {
     sendCode(0);
