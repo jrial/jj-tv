@@ -17,16 +17,29 @@
 
 #include <IRremote.h>
 #include <EEPROM.h>
+#include <LowPower.h>
+#include <PinChangeInt.h>
 
-int RECV_PIN = 11;
-int BUTTON_PIN = 12;
-int STATUS_PIN = 13;
+// How many minutes of inactivity before we turn the TV off?
+// Note: not very accurate, but a good ballpark figure.
+const int minutes = 45;
+
+// Config
+
+const int RECV_PIN = 11;
+const int BUTTON_PIN = 2;
+const int STATUS_PIN = 13;
+const int MOTION_PIN = 12; // which is also an interrupt pin. :)
 
 IRrecv irrecv(RECV_PIN);
 IRsend irsend;
 
 decode_results results;
-int lastButtonState;
+int sleepCycles;
+int elapsedCycles = 0;
+bool recording = false;
+bool motion = false;
+bool tv_on = false;
 
 
 // Storage for the recorded code
@@ -181,17 +194,27 @@ void sendCode(int repeat) {
   }
 }
 
+void intrRecord() {
+  recording = true;
+}
 
+void intrMotion() {
+  motion = true;
+}
 
 void setup() {
   Serial.begin(9600);
-  irrecv.enableIRIn(); // Start the receiver
   pinMode(BUTTON_PIN, INPUT);
+  pinMode(MOTION_PIN, INPUT);
   pinMode(STATUS_PIN, OUTPUT);
+  digitalWrite(BUTTON_PIN, LOW);
+  digitalWrite(MOTION_PIN, LOW);
+  sleepCycles = 60 * minutes / 8;  // precision not terribly important
   // Read stored values from EEPROM
   int tmpCodeType = EEPROM.read(0);
   // EEPROM values are initialised at 255. If value differs,
-  // it means we have a code stored. We can initialise values.
+  // it means we have a code stored, since 255 is not a valid code.
+  // Initialise values.
   if (tmpCodeType != 255) {
     codeType = tmpCodeType;
     codeLen = EEPROM.read(1);
@@ -207,25 +230,48 @@ void setup() {
 }
 
 void loop() {
-  // If button pressed, send the code.
-  int buttonState = digitalRead(BUTTON_PIN);
-  if (lastButtonState == HIGH && buttonState == LOW) {
-    Serial.println("Released");
-    irrecv.enableIRIn(); // Re-enable receiver
+  if (recording) {
+    irrecv.enableIRIn();
+    Serial.println("Recording");
+    digitalWrite(STATUS_PIN, HIGH);
+    while (recording) {
+      if (irrecv.decode(&results)) {
+        Serial.println("Got code!");
+        storeCode(&results);
+        recording = false;
+      }
+    }
+    digitalWrite(STATUS_PIN, LOW);
   }
 
-  if (buttonState) {
-    Serial.println("Pressed, sending");
+  if (motion) {
+    Serial.println("We have motion!");
+    elapsedCycles = 0;
+    motion = false;
     digitalWrite(STATUS_PIN, HIGH);
-    sendCode(lastButtonState == buttonState);
+    delay(50);
     digitalWrite(STATUS_PIN, LOW);
-    delay(50); // Wait a bit between retransmissions
+    if (!tv_on) {
+      sendCode(0);
+      tv_on = true;
+      Serial.println("Turning on");
+    }
   }
-  else if (irrecv.decode(&results)) {
-    digitalWrite(STATUS_PIN, HIGH);
-    storeCode(&results);
-    irrecv.resume(); // resume receiver
-    digitalWrite(STATUS_PIN, LOW);
+  Serial.println("Attaching interrupts");
+  delay(100);
+  attachInterrupt(0, intrRecord, FALLING);
+  PCintPort::attachInterrupt(MOTION_PIN, intrMotion, FALLING);
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
+  detachInterrupt(0);
+  PCintPort::PCdetachInterrupt(MOTION_PIN);
+  Serial.println("Detaching interrupts");
+  delay(100);
+  elapsedCycles += 1; // no need to count cycles while in record mode.
+
+  if (tv_on && (elapsedCycles >= sleepCycles)) {
+    sendCode(0);
+    tv_on = false;
+    Serial.println("Turning off");
   }
-  lastButtonState = buttonState;
+
 }
