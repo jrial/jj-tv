@@ -95,7 +95,6 @@ void storeCode(decode_results *results) {
   codeType = results->decode_type;
   int count = results->rawlen;
   if (codeType == UNKNOWN) {
-    Serial.println("Received unknown code, saving as raw");
     codeLen = results->rawlen - 1;
     EEPROM.write(0, codeType);
     EEPROM.write(1, codeLen);
@@ -107,43 +106,30 @@ void storeCode(decode_results *results) {
       if (i % 2) {
         // Mark
         rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK - MARK_EXCESS;
-        Serial.print(" m");
       }
       else {
         // Space
         rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK + MARK_EXCESS;
-        Serial.print(" s");
       }
       EEPROM.write(6 + i - 1, rawCodes[i - 1]);
-      Serial.print(rawCodes[i - 1], DEC);
     }
-    Serial.println("");
   }
   else {
     EEPROM.write(0, codeType);
     if (codeType == NEC) {
-      Serial.print("Received NEC: ");
       if (results->value == REPEAT) {
         // Don't record a NEC repeat value as that's useless.
-        Serial.println("repeat; ignoring.");
         return;
       }
     }
     else if (codeType == SONY) {
-      Serial.print("Received SONY: ");
     }
     else if (codeType == RC5) {
-      Serial.print("Received RC5: ");
     }
     else if (codeType == RC6) {
-      Serial.print("Received RC6: ");
     }
     else {
-      Serial.print("Unexpected codeType ");
-      Serial.print(codeType, DEC);
-      Serial.println("");
     }
-    Serial.println(results->value, HEX);
     codeValue = results->value;
     codeLen = results->bits;
     EEPROM.write(1, codeLen);
@@ -155,18 +141,13 @@ void sendCode(int repeat) {
   if (codeType == NEC) {
     if (repeat) {
       irsend.sendNEC(REPEAT, codeLen);
-      Serial.println("Sent NEC repeat");
     }
     else {
       irsend.sendNEC(codeValue, codeLen);
-      Serial.print("Sent NEC ");
-      Serial.println(codeValue, HEX);
     }
   }
   else if (codeType == SONY) {
     irsend.sendSony(codeValue, codeLen);
-    Serial.print("Sent Sony ");
-    Serial.println(codeValue, HEX);
   }
   else if (codeType == RC5 || codeType == RC6) {
     if (!repeat) {
@@ -177,20 +158,15 @@ void sendCode(int repeat) {
     codeValue = codeValue & ~(1 << (codeLen - 1));
     codeValue = codeValue | (toggle << (codeLen - 1));
     if (codeType == RC5) {
-      Serial.print("Sent RC5 ");
-      Serial.println(codeValue, HEX);
       irsend.sendRC5(codeValue, codeLen);
     }
     else {
       irsend.sendRC6(codeValue, codeLen);
-      Serial.print("Sent RC6 ");
-      Serial.println(codeValue, HEX);
     }
   }
   else if (codeType == UNKNOWN /* i.e. raw */) {
     // Assume 38 KHz
     irsend.sendRaw(rawCodes, codeLen, 38);
-    Serial.println("Sent raw");
   }
 }
 
@@ -203,7 +179,6 @@ void intrMotion() {
 }
 
 void setup() {
-  Serial.begin(9600);
   pinMode(BUTTON_PIN, INPUT);
   pinMode(MOTION_PIN, INPUT);
   pinMode(STATUS_PIN, OUTPUT);
@@ -233,14 +208,12 @@ void loop() {
   if (recording) {
     int start = millis();
     irrecv.enableIRIn();
-    Serial.println("Recording");
     digitalWrite(STATUS_PIN, HIGH);
     while (recording) {
       if ((millis() - start) > 10000) {
         recording = false;
       }
       if (irrecv.decode(&results)) {
-        Serial.println("Got code!");
         storeCode(&results);
         recording = false;
       }
@@ -249,7 +222,6 @@ void loop() {
   }
 
   if (motion) {
-    Serial.println("We have motion!");
     elapsedCycles = 0;
     motion = false;
     digitalWrite(STATUS_PIN, HIGH);
@@ -258,24 +230,18 @@ void loop() {
     if (!tv_on) {
       sendCode(0);
       tv_on = true;
-      Serial.println("Turning on");
     }
   }
-  Serial.println("Attaching interrupts");
-  delay(100);
   attachInterrupt(0, intrRecord, FALLING);
   PCintPort::attachInterrupt(MOTION_PIN, intrMotion, FALLING);
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);
   detachInterrupt(0);
   PCintPort::PCdetachInterrupt(MOTION_PIN);
-  Serial.println("Detaching interrupts");
-  delay(100);
   elapsedCycles += 1; // no need to count cycles while in record mode.
 
   if (tv_on && (elapsedCycles >= sleepCycles)) {
     sendCode(0);
     tv_on = false;
-    Serial.println("Turning off");
   }
 
 }
